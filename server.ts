@@ -6,7 +6,6 @@ import { fileURLToPath } from 'url';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import Groq from "groq-sdk";
-import { GoogleGenAI, Type } from "@google/genai";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,15 +13,6 @@ const __dirname = path.dirname(__filename);
 const getGroq = () => {
   const apiKey = process.env.VITE_GROQ_API_KEY || process.env.GROQ_API_KEY;
   return apiKey ? new Groq({ apiKey }) : null;
-};
-
-const getGemini = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    console.warn("GEMINI_API_KEY is missing from environment");
-    return null;
-  }
-  return new GoogleGenAI({ apiKey });
 };
 
 async function startServer() {
@@ -119,72 +109,33 @@ async function startServer() {
     console.log(`Optimizing SEO using ${provider}...`);
 
     try {
-      if (provider === 'groq') {
-        const groq = getGroq();
-        if (!groq) return res.status(400).json({ error: "Groq API Key is missing on the server. Please add it to your Secrets." });
-        
-        const chatCompletion = await groq.chat.completions.create({
-          messages: [
-            {
-              role: "system",
-              content: "You are an expert SEO specialist. Always respond with raw JSON only, no markdown formatting."
-            },
-            {
-              role: "user",
-              content: prompt,
-            },
-          ],
-          model: "llama-3.3-70b-versatile",
-          response_format: { type: "json_object" },
-        });
-
-        const content = chatCompletion.choices[0]?.message?.content;
-        if (!content) throw new Error("No response from Groq");
-        
-        console.log("Groq raw content:", content);
-        
-        try {
-          // Clean JSON formatting
-          const cleaned = content.replace(/```json\n?|```\n?/g, '').trim();
-          res.json(JSON.parse(cleaned));
-        } catch (parseError) {
-          console.error("JSON Parse Error (Groq):", parseError);
-          res.status(500).json({ error: "Invalid JSON response from AI", raw: content });
-        }
-      } else {
-        const ai = getGemini();
-        if (!ai) return res.status(400).json({ error: "Gemini API is not configured on the server." });
-        
-        const response = await ai.models.generateContent({
-          model: "gemini-2.0-flash",
-          contents: prompt,
-          config: {
-            systemInstruction: "You are an expert SEO specialist. Always respond with raw JSON only, no markdown formatting. The JSON must match the requested schema exactly.",
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING },
-                description: { type: Type.STRING },
-                keywords: { type: Type.STRING }
-              },
-              required: ["title", "description", "keywords"]
-            }
-          }
-        });
-        
-        const text = response.text;
-        if (!text) throw new Error("No response from Gemini");
-        
-        console.log("Gemini raw text:", text);
-        
-        try {
-          res.json(JSON.parse(text));
-        } catch (parseError) {
-          console.error("JSON Parse Error (Gemini):", parseError);
-          res.status(500).json({ error: "Invalid JSON response from AI", raw: text });
-        }
+      if (provider !== 'groq') {
+        return res.status(400).json({ error: "Only Groq provider is supported on the server." });
       }
+
+      const groq = getGroq();
+      if (!groq) throw new Error("Groq API Key (VITE_GROQ_API_KEY) is missing on the server.");
+      
+      const chatCompletion = await groq.chat.completions.create({
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert SEO specialist. Always respond with raw JSON only, no markdown formatting."
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        model: "llama-3.3-70b-versatile",
+        response_format: { type: "json_object" },
+      });
+
+      const content = chatCompletion.choices[0]?.message?.content;
+      if (!content) throw new Error("No response from Groq");
+      
+      const cleaned = content.replace(/```json\n?|```\n?/g, '').trim();
+      res.json(JSON.parse(cleaned));
     } catch (error: any) {
       console.error('SEO Optimization error:', error);
       res.status(500).json({ error: error.message });
@@ -197,41 +148,28 @@ async function startServer() {
     console.log(`Analyzing element using ${provider}...`);
 
     try {
-      if (provider === 'groq') {
-        const groq = getGroq();
-        if (!groq) return res.status(400).json({ error: "Groq API Key (VITE_GROQ_API_KEY) is missing on the server." });
-        
-        const chatCompletion = await groq.chat.completions.create({
-          messages: [
-            {
-              role: "system",
-              content: "You are a web structure analyst. Provide short, specific descriptions of HTML element locations."
-            },
-            {
-              role: "user",
-              content: prompt,
-            },
-          ],
-          model: "llama-3.1-8b-instant",
-        });
-
-        const description = chatCompletion.choices[0]?.message?.content || "Structural location analyzed.";
-        res.json({ description });
-      } else {
-        const ai = getGemini();
-        if (!ai) return res.status(400).json({ error: "Gemini API is not configured on the server." });
-        
-        const response = await ai.models.generateContent({
-          model: "gemini-2.0-flash",
-          contents: prompt,
-          config: {
-            systemInstruction: "You are a web structure analyst. Provide short, specific descriptions of HTML element locations."
-          }
-        });
-        
-        const description = response.text || "Structural location analyzed.";
-        res.json({ description });
+      if (provider !== 'groq') {
+        return res.status(400).json({ error: "Only Groq provider is supported on the server." });
       }
+
+      const groq = getGroq();
+      if (!groq) throw new Error("Groq API Key (VITE_GROQ_API_KEY) is missing on the server.");
+      
+      const chatCompletion = await groq.chat.completions.create({
+        messages: [
+          {
+            role: "system",
+            content: "You are a web structure analyst. Provide short, specific descriptions of HTML element locations."
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        model: "llama-3.1-8b-instant",
+      });
+
+      res.json({ description: chatCompletion.choices[0]?.message?.content || "Structural location analyzed." });
     } catch (error: any) {
       console.error('Element analysis error:', error);
       res.status(500).json({ error: error.message });
